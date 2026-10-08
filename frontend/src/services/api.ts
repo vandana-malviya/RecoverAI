@@ -16,7 +16,8 @@ import type {
   WebhookSimulateResponse,
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const RAW_URL = import.meta.env.VITE_API_BASE_URL || 'https://recoverai-backend-qt4y.onrender.com';
+const API_BASE = RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL.replace(/\/$/, '')}/api`;
 
 class ApiService {
   private token: string | null = null;
@@ -52,11 +53,6 @@ class ApiService {
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-
-    // Example:
-    // const res = await fetch(`${API_BASE}/api/demo/reset-all`, { method: 'POST' });
-
-
 
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
