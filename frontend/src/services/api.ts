@@ -16,7 +16,7 @@ import type {
   WebhookSimulateResponse,
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 class ApiService {
   private token: string | null = null;
@@ -52,6 +52,11 @@ class ApiService {
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
+
+    // Example:
+    // const res = await fetch(`${API_BASE}/api/demo/reset-all`, { method: 'POST' });
+
+
 
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
