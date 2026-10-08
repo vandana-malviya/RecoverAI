@@ -99,6 +99,8 @@ export interface AIDecisionOutput {
   suggested_payment_method?: string;
   guardrail_status: 'PASSED' | 'OVERRIDDEN' | 'ENFORCED';
   guardrail_notes?: string;
+  guardrail_applied?: boolean;
+  original_recommended_action?: RecoveryAction;
   factors_considered: string[];
 }
 
@@ -114,6 +116,7 @@ export interface RecoveryAttempt {
   result: string;
   details?: Record<string, any>;
   guardrail_applied?: boolean;
+  original_action?: RecoveryAction;
 }
 
 export interface DashboardMetrics {
@@ -185,10 +188,68 @@ export interface DemoScenario {
   amount: number;
   payment_method: string;
   failure_reason: string;
+  gateway_error_code?: string;
+  gateway_error_description?: string;
   expected_agent_action: string;
   expected_guardrail: string;
+  guardrail_override?: boolean;
   story: string;
   badge: string;
+}
+
+export interface DemoBatchResultItem {
+  scenario_id: string;
+  title: string;
+  payment_id: string;
+  amount: number;
+  failure_reason: string;
+  recommended_action: string;
+  confidence: number;
+  priority: string;
+  guardrail_status: string;
+  guardrail_applied: boolean;
+  original_recommended_action: string;
+  guardrail_notes?: string;
+  reason: string;
+}
+
+export interface DemoBatchResult {
+  success: boolean;
+  batch_size: number;
+  results: DemoBatchResultItem[];
+  message: string;
+}
+
+export interface WebhookPreset {
+  id: string;
+  name: string;
+  description: string;
+  event: string;
+  amount: number;
+  payment_method: string;
+  failure_reason: string;
+  gateway_error_code: string;
+  gateway_error_description: string;
+  customer_name: string;
+  customer_email: string;
+}
+
+export interface WebhookSimulateResponse {
+  success: boolean;
+  event_id: string;
+  event: string;
+  payment_id: string;
+  customer_name: string;
+  amount: number;
+  payment_method: string;
+  failure_reason: string;
+  status: string;
+  recovery_status: string;
+  ai_recommendation?: string;
+  guardrail_status?: string;
+  guardrail_applied?: boolean;
+  original_recommended_action?: string;
+  message: string;
 }
 
 export interface AgentActivity {

@@ -39,13 +39,13 @@ class RecoveryGuardrails:
         # 1. Hard Guardrail: Max Retry Boundary
         factors_checked.append(f"Retry Count Check: {retry_count}/{cls.MAX_RETRIES}")
         if retry_count >= cls.MAX_RETRIES:
-            status = "OVERRIDDEN" if proposed_action in [RecoveryAction.RETRY_NOW, RecoveryAction.RETRY_AFTER_DELAY] else "ENFORCED"
+            status = "OVERRIDDEN" if proposed_action != RecoveryAction.ESCALATE_TO_MERCHANT else "ENFORCED"
             logger.info(f"Guardrail triggered for max retries: {status}")
             return (
                 status,
                 RecoveryAction.ESCALATE_TO_MERCHANT,
                 ActionPriority.HIGH,
-                f"Deterministic Guardrail Enforced: Max retry threshold ({cls.MAX_RETRIES}) reached. Automated retries locked to protect merchant gateway health score.",
+                f"Deterministic Safety Guardrail Triggered: Max retry threshold ({cls.MAX_RETRIES}) reached. Automated retries locked to prevent gateway chargeback penalties.",
                 factors_checked
             )
 
@@ -57,11 +57,23 @@ class RecoveryGuardrails:
                 status,
                 RecoveryAction.REQUEST_PAYMENT_METHOD_UPDATE,
                 proposed_priority,
-                f"Deterministic Guardrail Enforced: Failure mode is {failure_reason}. Re-attempts are blocked; credential update workflow enforced.",
+                f"Deterministic Safety Guardrail Triggered: Failure mode is {failure_reason}. Re-attempts strictly blocked; customer credential update link enforced.",
                 factors_checked
             )
 
-        # 3. Guardrail: High-Value VIP Basket Protection
+        # 3. Guardrail: Transient UPI Failure Safeguard
+        if failure_reason == FailureReason.UPI_FAILURE.value and proposed_action == RecoveryAction.RETRY_NOW:
+            status = "OVERRIDDEN"
+            notes = "Deterministic Safety Guardrail Triggered: UPI PSP bank node degradation detected. Instant retry blocked and replaced with alternative payment method suggestion to avoid duplicate debit."
+            return (
+                status,
+                RecoveryAction.SUGGEST_ALTERNATIVE_PAYMENT,
+                proposed_priority,
+                notes,
+                factors_checked
+            )
+
+        # 4. Guardrail: High-Value VIP Basket Protection
         factors_checked.append(f"Customer Value & Amount Tier: {customer_segment} / ₹{amount:,.0f}")
         final_priority = proposed_priority
         notes = "All deterministic safety guardrails passed successfully."
@@ -71,18 +83,6 @@ class RecoveryGuardrails:
             if final_priority != ActionPriority.HIGH:
                 final_priority = ActionPriority.HIGH
                 status = "ENFORCED"
-                notes = "Deterministic Policy Enforced: High-value account / transaction promoted to HIGH priority recovery queue."
-
-        # 4. Guardrail: Transient UPI Failure Safeguard
-        if failure_reason == FailureReason.UPI_FAILURE.value and proposed_action == RecoveryAction.RETRY_NOW:
-            status = "OVERRIDDEN"
-            notes = "Deterministic Guardrail: UPI gateway degradation detected. Replaced instant retry with alternative payment method suggestion to avoid duplicate debit."
-            return (
-                status,
-                RecoveryAction.SUGGEST_ALTERNATIVE_PAYMENT,
-                final_priority,
-                notes,
-                factors_checked
-            )
+                notes = "Deterministic Policy Enforced: High-value VIP transaction promoted to HIGH priority recovery queue."
 
         return (status, proposed_action, final_priority, notes, factors_checked)

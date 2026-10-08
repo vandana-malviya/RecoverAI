@@ -4,7 +4,7 @@
 **Target Track:** Razorpay AI Builder Internship — *AI Revenue Recovery Track*  
 **Architecture:** Autonomous Multi-Tool LangGraph Agent with Deterministic Fintech Guardrails  
 **Frontend Design System:** Modern Fintech SaaS Light Design System  
-**Status:** Production-Grade Complete & Test-Verified (10/10 Pytest, 0 TS Errors)
+**Status:** Production-Grade Complete & Test-Verified (12/12 Pytest, 0 TS Errors)
 
 ---
 
@@ -12,15 +12,16 @@
 1. [Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
 2. [System Architecture & Data Flow](#2-system-architecture--data-flow)
 3. [LangGraph Recovery Agent Architecture](#3-langgraph-recovery-agent-architecture)
-4. [Deterministic Business Safety Guardrails](#4-deterministic-business-safety-guardrails)
+4. [Deterministic Business Safety Guardrails & Visual Override UI](#4-deterministic-business-safety-guardrails--visual-override-ui)
 5. [Recovery Strategy Simulator (Standout Feature)](#5-recovery-strategy-simulator-standout-feature)
-6. [Interactive Demo Scenarios Center](#6-interactive-demo-scenarios-center)
-7. [Database Schema & Data Models](#7-database-schema--data-models)
-8. [Complete REST API Reference](#8-complete-rest-api-reference)
-9. [Frontend Application Architecture & Design System](#9-frontend-application-architecture--design-system)
-10. [Local Installation & Setup Guide](#10-local-installation--setup-guide)
-11. [Testing & Verification Suite](#11-testing--verification-suite)
-12. [Technical Viva / Evaluator Q&A Guide](#12-technical-viva--evaluator-qa-guide)
+6. [Interactive Demo Scenarios Center & Batch Evaluator](#6-interactive-demo-scenarios-center--batch-evaluator)
+7. [Asynchronous Gateway Webhook Simulation](#7-asynchronous-gateway-webhook-simulation)
+8. [Database Schema & Data Models](#8-database-schema--data-models)
+9. [Complete REST API Reference](#9-complete-rest-api-reference)
+10. [Frontend Application Architecture & Design System](#10-frontend-application-architecture--design-system)
+11. [Local Installation & Setup Guide](#11-local-installation--setup-guide)
+12. [Testing & Verification Suite](#12-testing--verification-suite)
+13. [Technical Viva / Evaluator Q&A Guide](#13-technical-viva--evaluator-qa-guide)
 
 ---
 
@@ -70,10 +71,14 @@ graph TD
     subgraph "Mock Financial Gateway Services"
         MockGateway["Payment Gateway Simulator (Bank Switch / PSP)"]
         MockDispatcher["Multi-Channel Dispatcher (WhatsApp / SMS / Email Magic Links)"]
+        WebhookSimulator["Asynchronous Webhook Ingestion Engine (/api/webhook/simulate)"]
     end
 
     API <--> DB
     API --> StateGraph
+    API --> WebhookSimulator
+    WebhookSimulator --> DB
+    WebhookSimulator --> StateGraph
     StateGraph --> State
     State --> Tools
     Tools <--> DB
@@ -115,40 +120,39 @@ flowchart TD
 | 8 | `suggest_alternative_payment_method` | Generates alternate channel recommendation (e.g. Card/NetBanking during UPI down). | `payment_id` $\rightarrow$ `{suggested_method, reason}` |
 | 9 | `record_recovery_action` | Writes immutable audit log record to `recovery_attempts` and `agent_activities`. | `recovery_data` $\rightarrow$ `{recovery_id, timestamp}` |
 
-### Dual-Mode AI Reasoning
-- **Mode 1 (Live OpenAI LLM)**: When `OPENAI_API_KEY` is configured in `.env`, the agent invokes OpenAI `gpt-4o-mini` with strict Pydantic JSON schema formatting.
-- **Mode 2 (Domain Contextual Intelligence Engine)**: When running offline or without an API key, the agent uses contextual heuristics that evaluate failure code diagnostics, LTV tier, retry counters, and payment channel latency.
-
 ---
 
-## 4. Deterministic Business Safety Guardrails
+## 4. Deterministic Business Safety Guardrails & Visual Override UI
 
-To prevent hallucinated, unsafe, or non-compliant financial decisions, all model outputs must pass through a strict **Guardrails Layer** before execution:
+To prevent hallucinated, unsafe, or non-compliant financial decisions, all model outputs pass through a strict **Guardrails Layer** before execution. When a guardrail triggers, the UI renders a prominent **Visual Guardrail Override Comparison Badge**:
 
+```
++-----------------------------------------------------------------------------------------+
+| [!] DETERMINISTIC SAFETY GUARDRAIL INTERVENTION                     [ POLICY OVERRIDE ]  |
+|-----------------------------------------------------------------------------------------|
+|  Original Agent Intent:                -->   Deterministic Safety Override Enforced:     |
+|  [ RETRY_AFTER_DELAY ] (BLOCKED)             [ REQUEST_PAYMENT_METHOD_UPDATE ] (ENFORCED)|
+|                                                                                         |
+|  Guardrail Reason: Card expiry date has passed. Re-attempts strictly blocked to prevent |
+|  gateway penalization and card network fines.                                            |
++-----------------------------------------------------------------------------------------+
+```
+
+### Guardrail Rules:
 1. **Maximum Retry Limit Hard Lock ($\le 3$ Retries)**:
    - *Rule*: If `retry_count >= 3`, any retry recommendation is strictly overridden to `ESCALATE_TO_MERCHANT`.
-   - *Reason*: Prevents payment gateway rate-limiting, chargeback penalties, and issuer fraud flags.
 2. **Expired & Invalid Card Lockdown**:
-   - *Rule*: If `failure_reason` is `EXPIRED_CARD` or `INVALID_CARD`, automated re-authorizations are 100% blocked.
-   - *Action Enforced*: `REQUEST_PAYMENT_METHOD_UPDATE` (sends secure customer credential update magic link).
+   - *Rule*: If `failure_reason` is `EXPIRED_CARD` or `INVALID_CARD`, automated re-authorizations are 100% blocked and `REQUEST_PAYMENT_METHOD_UPDATE` is enforced.
 3. **VIP Customer High-Priority Queue**:
    - *Rule*: Transactions $\ge \text{₹}25,000$ or customers tagged `HIGH_VALUE` (LTV $\ge \text{₹}1,00,000$) automatically receive `HIGH` priority status.
 4. **Transient UPI Degradation Routing**:
-   - *Rule*: During UPI PSP node failures, the agent suggests alternate payment methods (Cards, NetBanking) instead of triggering rapid UPI retries.
+   - *Rule*: During UPI PSP node failures, the agent suggests alternate payment methods (Cards, NetBanking) instead of rapid retries.
 
 ---
 
 ## 5. Recovery Strategy Simulator (Standout Feature)
 
 The **Strategy Simulator** (`/simulator`) is an interactive policy sandbox that models portfolio revenue lift and gateway health before policies are deployed to live production.
-
-### Controllable Policy Parameters:
-- `auto_retry_enabled` (Boolean): Enable/disable automated smart retries.
-- `retry_window_minutes` (5m - 120m): Delayed backoff window duration.
-- `max_retries_allowed` (1 - 4): Hard limit threshold on retries.
-- `suggest_alt_method_enabled` (Boolean): Dynamic payment method switching.
-- `smart_reminder_enabled` (Boolean): Multi-channel reminder dispatching (WhatsApp, Email).
-- `vip_priority_escalation` (Boolean): Concierge priority queue for high-ticket transactions.
 
 ### Output Metrics Computed:
 $$\text{Net Revenue Lift} = \text{Simulated Recovered Revenue} - \text{Baseline Fixed-Rule Revenue}$$
@@ -157,199 +161,106 @@ $$\text{Unnecessary Retries Prevented} = \text{Baseline Blind Retries} - \text{A
 
 ---
 
-## 6. Interactive Demo Scenarios Center
+## 6. Interactive Demo Scenarios Center & Batch Evaluator
 
-The platform includes 5 pre-configured demo scenarios accessible from `/demo`:
+Accessible from `/demo`:
+- **1-Click Scenario Launch**: Resets transaction to failed state and opens live workspace.
+- **🔄 Reset All 5 Demo Scenarios**: Restores `PAY_DEMO_001` through `PAY_DEMO_005` in one click.
+- **⚡ Batch Evaluate All (Viva Mode)**: Evaluates all 5 scenarios simultaneously, displaying an interactive comparison matrix showing Original Intent vs Guardrail Override Action.
 
-| Scenario ID | Test Case Title | Customer & Amount | Failure Mode | Expected AI Action | Guardrail Outcome |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `PAY_DEMO_001` | **Transient Network Timeout** | Aditi Sharma (₹14,500) | `NETWORK_ERROR` | `RETRY_AFTER_DELAY` (30 min backoff) | `PASSED` $\rightarrow$ 100% Recovered |
-| `PAY_DEMO_002` | **Expired Card on SaaS Subscription** | Neha Joshi (₹4,999) | `EXPIRED_CARD` | `REQUEST_PAYMENT_METHOD_UPDATE` | `OVERRIDDEN` (Retries locked) |
-| `PAY_DEMO_003` | **UPI PSP Bank Outage** | Siddharth Rao (₹2,499) | `UPI_FAILURE` | `SUGGEST_ALTERNATIVE_PAYMENT` (Cards) | `PASSED` (PSP degradation detected) |
-| `PAY_DEMO_004` | **High-Value VIP Basket Drop** | Vikram Malhotra (₹48,500) | `INSUFFICIENT_FUNDS` | `SEND_PAYMENT_REMINDER` | `ENFORCED` (VIP Priority = HIGH) |
-| `PAY_DEMO_005` | **Exhausted Max Retries (3/3)** | Simran Gill (₹8,200) | `BANK_DECLINED` | `ESCALATE_TO_MERCHANT` | `OVERRIDDEN` (Max retry limit reached) |
+| Scenario ID | Test Case Title | Failure Cause | AI Recommendation | Guardrail Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `PAY_DEMO_001` | **Transient Network Timeout** | `NETWORK_ERROR` | `RETRY_AFTER_DELAY` (30m) | `PASSED` $\rightarrow$ 100% Recovered |
+| `PAY_DEMO_002` | **Expired Card on SaaS Subscription** | `EXPIRED_CARD` | `REQUEST_PAYMENT_METHOD_UPDATE` | `OVERRIDDEN` (Retries locked) |
+| `PAY_DEMO_003` | **UPI PSP Bank Outage** | `UPI_FAILURE` | `SUGGEST_ALTERNATIVE_PAYMENT` (Cards) | `OVERRIDDEN` (PSP degradation handled) |
+| `PAY_DEMO_004` | **High-Value VIP Basket Drop** | `INSUFFICIENT_FUNDS` | `SEND_PAYMENT_REMINDER` (Concierge) | `ENFORCED` (Priority = HIGH) |
+| `PAY_DEMO_005` | **Exhausted Max Retries (3/3)** | `BANK_DECLINED` | `ESCALATE_TO_MERCHANT` | `OVERRIDDEN` (Max limit reached) |
 
 ---
 
-## 7. Database Schema & Data Models
+## 7. Asynchronous Gateway Webhook Simulation
 
-### 1. `customers` Collection
+Merchants and evaluators can simulate live asynchronous gateway payment drop events (matching Razorpay/Stripe `payment.failed` webhooks) via `POST /api/webhook/simulate` or through the **"Simulate Gateway Webhook"** modal in the frontend:
+- **Preset Templates**: UPI PSP Timeout, Expired Card Subscription, High-Value Bank Decline, Network Gateway Drop, or Custom JSON.
+- **Automated Workflow Trigger**: Ingests the drop event, creates the customer transaction, adds lifecycle timeline markers, and triggers LangGraph AI analysis immediately.
+
+---
+
+## 8. Database Schema & Data Models
+
+### `payments` Document Example
 ```json
 {
-  "customer_id": "CUST_1001",
-  "name": "Aditi Sharma",
-  "email": "aditi.sharma@techcorp.io",
-  "phone": "+91 98765 43210",
-  "customer_segment": "HIGH_VALUE",
-  "preferred_payment_method": "CARD",
-  "lifetime_value": 245000.0,
-  "total_transactions": 48,
-  "successful_transactions": 45,
-  "failed_transactions": 3,
-  "risk_score": 0.05,
-  "created_at": "2025-11-12T00:00:00Z"
-}
-```
-
-### 2. `payments` Collection
-```json
-{
-  "payment_id": "PAY_DEMO_001",
-  "customer_id": "CUST_1001",
-  "customer_name": "Aditi Sharma",
-  "customer_email": "aditi.sharma@techcorp.io",
-  "amount": 14500.0,
+  "payment_id": "PAY_DEMO_002",
+  "customer_id": "CUST_DEMO_2",
+  "customer_name": "Neha Joshi",
+  "customer_email": "neha.j@cloudmatrix.com",
+  "amount": 4200.0,
   "currency": "INR",
   "payment_method": "CARD",
   "status": "FAILED",
-  "failure_reason": "NETWORK_ERROR",
-  "gateway_error_code": "GATEWAY_TIMEOUT_504",
-  "gateway_error_description": "Upstream payment gateway connection timed out during TLS handshake.",
-  "created_at": "2026-08-23T21:00:00Z",
+  "failure_reason": "EXPIRED_CARD",
+  "gateway_error_code": "CARD_EXPIRED_201",
+  "gateway_error_description": "Card expiry date has passed. Upstream payment network declined transaction.",
+  "created_at": "2026-10-08T16:00:00Z",
   "retry_count": 0,
   "recovered": false,
-  "recovery_status": "UNPROCESSED"
-}
-```
-
-### 3. `recovery_attempts` Collection
-```json
-{
-  "recovery_id": "REC_PAY_DEMO_001_01",
-  "payment_id": "PAY_DEMO_001",
-  "customer_id": "CUST_1001",
-  "action": "RETRY_AFTER_DELAY",
-  "status": "SUCCESS",
-  "timestamp": "2026-08-23T21:30:00Z",
-  "agent_confidence": 0.94,
-  "reason": "Temporary network timeout for high-success customer.",
-  "result": "Payment successfully recovered via delayed retry.",
-  "guardrail_applied": false
+  "recovery_status": "ACTION_RECOMMENDED",
+  "metadata": {
+    "ai_recommendation": {
+      "payment_id": "PAY_DEMO_002",
+      "recommended_action": "REQUEST_PAYMENT_METHOD_UPDATE",
+      "original_recommended_action": "RETRY_AFTER_DELAY",
+      "confidence": 0.95,
+      "priority": "MEDIUM",
+      "guardrail_status": "OVERRIDDEN",
+      "guardrail_applied": true,
+      "guardrail_notes": "Deterministic Safety Guardrail Triggered: Failure mode is EXPIRED_CARD. Re-attempts strictly blocked; customer credential update link enforced."
+    }
+  }
 }
 ```
 
 ---
 
-## 8. Complete REST API Reference
+## 9. Complete REST API Reference
 
-All endpoints are hosted on `/api` and documented interactively via OpenAPI at `http://localhost:8000/docs`.
-
-### Authentication & Health
-- `GET /health` — Application health check and database connectivity mode.
-- `POST /api/auth/login` — Issues JWT Bearer token for demo accounts (`admin@recoverai.io`).
-- `GET /api/auth/me` — Current authenticated merchant profile.
-
-### Dashboard & Analytics
-- `GET /api/dashboard/metrics` — Aggregates real-time KPIs (Total GMV, Recovered Revenue, AI Recovery Rate %, Velocity).
-- `GET /api/dashboard/charts` — Ingests time-series datasets for 5 Recharts components.
-
-### Payments Workbench
-- `GET /api/payments` — Query paginated payments with search (`?search=`), filtering by `status`, `payment_method`, `failure_reason`, and `min_amount/max_amount`.
-- `GET /api/payments/{id}` — Returns payment metadata, associated customer profile, and past recovery attempt logs.
-- `GET /api/payments/{id}/timeline` — Chronological lifecycle events of the transaction.
-
-### AI Agent & Recovery Execution
-- `POST /api/ai/analyze-payment` — Triggers the LangGraph Agent to analyze a failed payment and generate structured reasoning.
-  - *Request Body*: `{"payment_id": "PAY_DEMO_001"}`
-  - *Response*: `AIDecisionOutput` (recommended action, confidence, reasoning, guardrail status).
-- `POST /api/recovery/execute` — Simulates the recommended action and updates payment status in database.
-- `GET /api/agent/activity` — Immutable stream of all agent audit logs.
-
-### Simulator & Demo
-- `POST /api/simulator/run` — Executes policy simulation calculations across the payment portfolio.
-- `GET /api/demo/scenarios` — Returns the 5 evaluator demo scenarios.
-- `POST /api/demo/trigger/{id}` — Resets a demo transaction to its initial failed state for live demonstration.
-
----
-
-## 9. Frontend Application Architecture & Design System
-
-The frontend is built using **React 18 + TypeScript + Vite + Tailwind CSS v4** following a clean, light fintech design:
-
-- **Color Tokens**:
-  - Light Background Canvas: `#F8FAFC` (`bg-slate-50`)
-  - Elevated Card Surfaces: `#FFFFFF` (`bg-white`), `border-slate-200`, `shadow-xs`
-  - High-Contrast Navy Text: `#0F172A` (`text-slate-900`), `#475569` (`text-slate-600`)
-  - Primary Action Blue: `#2563EB` (`bg-blue-600`, `text-blue-600`)
-  - Recovered / Success Emerald: `#10B981` / `#16A34A` (`emerald-600/700`, `emerald-50`)
-  - Failed / Alert Rose: `#EF4444` / `#DC2626` (`rose-600/700`, `rose-50`)
-- **Key Views**:
-  1. `DashboardPage.tsx`: Executive command center with Recharts area, donut, and bar charts.
-  2. `FailedPaymentsPage.tsx`: Filterable workbench with search, multi-facet dropdowns, and status badges.
-  3. `PaymentDetailPage.tsx`: Deep-dive technical diagnostics, customer profile, and live AI execution.
-  4. `SimulatorPage.tsx`: Interactive policy sliders with net revenue lift calculation.
-  5. `DemoCenterPage.tsx`: 5 Evaluator-ready demo cards with 1-click launchers.
-  6. `AgentActivityPage.tsx`: Real-time audit log stream.
-  7. `AnalyticsPage.tsx`: Method efficiency and failure diagnostics breakdowns.
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Application health and database engine status |
+| `POST` | `/api/auth/login` | Merchant JWT authentication & token issuance |
+| `GET` | `/api/dashboard/metrics` | 7 Core financial KPIs (GMV, Recovered Revenue, AI Rate %) |
+| `GET` | `/api/dashboard/charts` | Chart data feeds for all 5 Recharts visualizations |
+| `GET` | `/api/payments` | Paginated payment search (`?search=`), filtering by method, reason, status |
+| `GET` | `/api/payments/{id}` | Deep diagnostic view, customer profile, and historical attempts |
+| `POST` | `/api/ai/analyze-payment` | Triggers LangGraph Recovery Agent on a failed transaction |
+| `POST` | `/api/recovery/execute` | Simulates and executes the recommended recovery action |
+| `POST` | `/api/simulator/run` | Strategy Simulator policy sandbox calculation engine |
+| `GET` | `/api/demo/scenarios` | Lists the 5 pre-configured demo cases |
+| `POST` | `/api/demo/trigger/{id}` | Resets demo payment to initial failed state for live walkthrough |
+| `POST` | `/api/demo/reset-all` | Resets all 5 demo scenarios simultaneously |
+| `POST` | `/api/demo/run-batch` | Evaluates all 5 demo scenarios in batch (Viva Mode) |
+| `GET` | `/api/webhook/presets` | Returns gateway webhook drop simulation presets |
+| `POST` | `/api/webhook/simulate` | Ingests simulated asynchronous gateway `payment.failed` event |
+| `GET` | `/api/agent/activity` | Live immutable feed of all AI decisions and outcomes |
 
 ---
 
 ## 10. Local Installation & Setup Guide
 
-### 1. Prerequisites
-- **Python 3.10+**
-- **Node.js v18+** and `npm.cmd` (on Windows)
-
-### 2. Backend Setup
 ```powershell
+# 1. Backend Setup (Port 8000)
 cd C:\Users\vanda\.gemini\antigravity\scratch\recoverai\backend
-
-# Install Python dependencies
 python -m pip install -r requirements.txt
+python -m pytest   # Runs all 12 unit tests (100% pass)
+python run.py      # Starts FastAPI server
 
-# Run backend unit tests
-python -m pytest
-
-# Start backend server (Runs on http://localhost:8000)
-python run.py
-```
-
-### 3. Frontend Setup
-```powershell
+# 2. Frontend Setup (Port 5173)
 cd C:\Users\vanda\.gemini\antigravity\scratch\recoverai\frontend
-
-# Install dependencies (Use npm.cmd on Windows)
-npm.cmd install
-
-# Start Vite development server (Runs on http://localhost:5173)
-npm.cmd run dev
+npm.cmd install    # Install dependencies
+npm.cmd run dev    # Starts Vite dev server
 ```
 
-Visit **[http://localhost:5173](http://localhost:5173)** in your browser.
-
----
-
-## 11. Testing & Verification Suite
-
-### Backend Test Suite
-Automated tests are implemented in `backend/tests/` using `pytest` and `pytest-asyncio`:
-- `test_agent.py`: Verifies LangGraph agent decisions for all failure modes and tests guardrail overrides (100% pass rate).
-- `test_api.py`: Validates FastAPI REST endpoints (metrics, search, simulation, demo runners).
-
-Execute tests anytime with:
-```powershell
-python -m pytest
-```
-
-### Frontend Build Verification
-The React frontend is verified with TypeScript strict type checking:
-```powershell
-npm.cmd run build
-```
-
----
-
-## 12. Technical Viva / Evaluator Q&A Guide
-
-### Q1: Why use LangGraph instead of a standard Python script with if-else conditions?
-> **Answer:** Payment revenue recovery is inherently a multi-step, state-dependent workflow involving variable tool calls (querying payment context, looking up customer LTV tiers, checking previous retry logs, calculating risk, and determining backoff windows). LangGraph provides a cyclical state machine (`StateGraph`) with structured state validation, modular tool orchestration, error boundary trapping, and observability that can incorporate LLM reasoning while remaining strictly bound to deterministic guardrails.
-
-### Q2: What prevents the AI from hallucinating and retrying an expired card repeatedly?
-> **Answer:** RecoverAI enforces a two-layer security model. While the model suggests a strategy, all outputs pass through a deterministic **Guardrails Layer** (`app/agent/guardrails.py`). If the error is `EXPIRED_CARD` or if `retry_count >= 3`, the guardrail overrides the action to `REQUEST_PAYMENT_METHOD_UPDATE` or `ESCALATE_TO_MERCHANT`, permanently blocking unauthorized retry charges.
-
-### Q3: How does the platform handle UPI PSP downtime differently from card declines?
-> **Answer:** UPI downtime is transient and switch-dependent. Retrying on a degraded UPI switch causes double-debits or long pending states. When the agent detects `UPI_FAILURE`, it uses the `suggest_alternative_payment_method` tool to generate an instant switch to Card or NetBanking checkout, preserving customer checkout intent.
-
-### Q4: How does the in-memory fallback database work?
-> **Answer:** `DatabaseManager` (`app/database/connection.py`) attempts to connect to MongoDB Atlas. If no external daemon is detected, it switches to a custom, asynchronous in-memory document store supporting Mongo query semantics (`find`, `find_one`, `insert_one`, `update_one`, `count_documents`, regex search, sorting, and pagination). This allows the project to run out-of-the-box on any evaluator machine without prerequisites.
-
+- **Frontend Application**: [http://localhost:5173](http://localhost:5173)
+- **FastAPI OpenAPI Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Master Documentation File**: [`DOCUMENTATION.md`](file:///C:/Users/vanda/.gemini/antigravity/scratch/recoverai/DOCUMENTATION.md)

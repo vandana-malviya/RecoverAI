@@ -66,3 +66,43 @@ async def test_simulator_execution():
         data = res.json()
         assert data["net_revenue_lift"] > 0
         assert len(data["category_breakdown"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_webhook_simulate_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        payload = {
+            "event": "payment.failed",
+            "amount": 5499.0,
+            "payment_method": "UPI",
+            "failure_reason": "UPI_FAILURE",
+            "customer_name": "Test Webhook User",
+            "customer_email": "webhook.test@example.com",
+            "auto_analyze": True
+        }
+        res = await ac.post("/api/webhook/simulate", json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["success"] is True
+        assert "payment_id" in data
+        assert data["payment_id"].startswith("PAY_WH_")
+        assert data["ai_recommendation"] is not None
+
+
+@pytest.mark.asyncio
+async def test_demo_reset_all_and_run_batch():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Reset all
+        res_reset = await ac.post("/api/demo/reset-all")
+        assert res_reset.status_code == 200
+        assert res_reset.json()["reset_count"] == 5
+
+        # Run batch
+        res_batch = await ac.post("/api/demo/run-batch")
+        assert res_batch.status_code == 200
+        data = res_batch.json()
+        assert data["success"] is True
+        assert data["batch_size"] == 5
+        assert len(data["results"]) == 5

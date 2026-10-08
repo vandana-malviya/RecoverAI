@@ -33,6 +33,8 @@ class AIDecisionOutput(BaseModel):
     suggested_payment_method: Optional[str] = None
     guardrail_status: str = "PASSED"  # PASSED, OVERRIDDEN, ENFORCED
     guardrail_notes: Optional[str] = None
+    guardrail_applied: bool = False
+    original_recommended_action: Optional[RecoveryAction] = None
     factors_considered: List[str] = Field(default_factory=list)
 
 
@@ -48,6 +50,7 @@ class RecoveryAttempt(BaseModel):
     result: str
     details: Dict[str, Any] = Field(default_factory=dict)
     guardrail_applied: bool = False
+    original_action: Optional[RecoveryAction] = None
 
 
 class RecoveryExecutionRequest(BaseModel):
@@ -68,3 +71,5 @@ class RecoveryExecutionResponse(BaseModel):
     new_payment_status: str
     timestamp: datetime
     simulated_gateway_response: Dict[str, Any]
+    guardrail_applied: bool = False
+    original_action: Optional[RecoveryAction] = None

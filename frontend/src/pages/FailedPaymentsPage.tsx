@@ -7,11 +7,13 @@ import {
   ChevronRight,
   AlertCircle,
   Bot,
+  Zap,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import type { PaymentItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import { WebhookSimulationModal } from '../components/WebhookSimulationModal';
 
 export const FailedPaymentsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +22,9 @@ export const FailedPaymentsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const limit = 20;
+
+  // Webhook Modal state
+  const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
 
   // Filters state
   const [search, setSearch] = useState('');
@@ -71,6 +76,15 @@ export const FailedPaymentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsWebhookModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Simulate Gateway Webhook</span>
+          </button>
+
           <Link
             to="/demo"
             className="px-3.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
@@ -299,6 +313,15 @@ export const FailedPaymentsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Webhook Simulation Modal */}
+      <WebhookSimulationModal
+        isOpen={isWebhookModalOpen}
+        onClose={() => setIsWebhookModalOpen(false)}
+        onSuccess={() => {
+          fetchPayments();
+        }}
+      />
     </div>
   );
 };

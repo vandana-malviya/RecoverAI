@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Lightbulb,
   Zap,
+  ShieldAlert,
 } from 'lucide-react';
 import type { AIDecisionOutput } from '../types';
 import { StatusBadge } from './StatusBadge';
@@ -28,6 +29,7 @@ export const AIExplanationCard: React.FC<AIExplanationCardProps> = ({
   hasExecuted = false,
 }) => {
   const confidencePct = Math.round(decision.confidence * 100);
+  const isOverridden = decision.guardrail_status === 'OVERRIDDEN' || decision.guardrail_applied;
 
   const actionLabels: Record<string, { label: string; desc: string; icon: any }> = {
     RETRY_NOW: {
@@ -112,6 +114,66 @@ export const AIExplanationCard: React.FC<AIExplanationCardProps> = ({
         </div>
       </div>
 
+      {/* 🛡️ Dedicated Visual Guardrail Override Comparison Badge */}
+      {isOverridden && (
+        <div className="mt-5 p-4 rounded-xl bg-amber-50/90 border border-amber-300 shadow-xs">
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-amber-200/80">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>DETERMINISTIC SAFETY GUARDRAIL INTERVENTION</span>
+            </div>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+              POLICY OVERRIDE ACTIVE
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-11 items-center gap-3">
+            {/* Original Intent */}
+            <div className="sm:col-span-5 p-3 rounded-lg bg-white/90 border border-amber-200">
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">
+                Original Agent Intent
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold line-through text-slate-400">
+                  {decision.original_recommended_action
+                    ? decision.original_recommended_action.replace(/_/g, ' ')
+                    : 'AUTOMATED RETRY'}
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                  BLOCKED
+                </span>
+              </div>
+            </div>
+
+            {/* Transition Arrow */}
+            <div className="sm:col-span-1 flex justify-center text-amber-700 font-bold">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+
+            {/* Enforced Override Action */}
+            <div className="sm:col-span-5 p-3 rounded-lg bg-emerald-50/90 border border-emerald-300">
+              <div className="text-[10px] uppercase font-bold text-emerald-800 mb-1">
+                Deterministic Safety Override Enforced
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-900">
+                  {decision.recommended_action.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  ENFORCED
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {decision.guardrail_notes && (
+            <div className="mt-2.5 text-[11px] text-amber-900 leading-relaxed font-medium bg-amber-100/50 p-2 rounded-lg border border-amber-200">
+              <strong>Guardrail Reason:</strong> {decision.guardrail_notes}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Recommended Action Highlight Card */}
       <div className="mt-5 p-4 rounded-xl bg-blue-50/90 border border-blue-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-start gap-3.5">
@@ -120,7 +182,7 @@ export const AIExplanationCard: React.FC<AIExplanationCardProps> = ({
           </div>
           <div>
             <span className="text-[11px] uppercase font-bold tracking-wider text-blue-700">
-              Recommended Recovery Action
+              {isOverridden ? 'Final Enforced Recovery Action' : 'Recommended Recovery Action'}
             </span>
             <div className="text-base font-bold text-slate-900 mt-0.5">{actionInfo.label}</div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">{actionInfo.desc}</p>

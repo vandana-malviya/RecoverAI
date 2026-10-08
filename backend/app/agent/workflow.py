@@ -169,6 +169,8 @@ Respond strictly in JSON matching this schema:
                     alternative_action=RecoveryAction(parsed.get("alternative_action", RecoveryAction.SUGGEST_ALTERNATIVE_PAYMENT.value)) if parsed.get("alternative_action") else None,
                     suggested_payment_method=parsed.get("suggested_payment_method", "UPI"),
                     guardrail_status="PASSED",
+                    guardrail_applied=False,
+                    original_recommended_action=None,
                     factors_considered=["Transaction Context", "Customer LTV Profile", "Gateway Diagnostics", "OpenAI LLM Reasoning"]
                 )
             }
@@ -183,26 +185,28 @@ Respond strictly in JSON matching this schema:
     ]
 
     if retry_count >= 3:
-        rec_action = RecoveryAction.ESCALATE_TO_MERCHANT
+        # Proposed raw action is retry, but max retry will override to ESCALATE_TO_MERCHANT
+        rec_action = RecoveryAction.RETRY_AFTER_DELAY
         priority = ActionPriority.HIGH
         confidence = 0.96
-        reason = f"Payment has failed {retry_count} times. Automated retries halted to avoid gateway penalties and chargeback friction."
+        reason = f"Payment has failed {retry_count} times. Baseline intent suggests re-attempt, subject to safety guardrails."
         alt_action = RecoveryAction.SEND_PAYMENT_REMINDER
-        delay = 0
+        delay = 30
         sug_method = None
     elif failure_reason in [FailureReason.EXPIRED_CARD.value, FailureReason.INVALID_CARD.value]:
-        rec_action = RecoveryAction.REQUEST_PAYMENT_METHOD_UPDATE
+        # Proposed baseline intent is retry, which guardrails will override to credential update
+        rec_action = RecoveryAction.RETRY_AFTER_DELAY
         priority = ActionPriority.HIGH if customer_tier == "HIGH" else ActionPriority.MEDIUM
         confidence = 0.95
-        reason = f"Payment failed due to {failure_reason}. Re-attempts on invalid card details will fail; requesting customer update payment credentials via secure link."
+        reason = f"Payment failed on card credentials ({failure_reason}). Re-attempt proposed, subject to safety card validity verification."
         alt_action = RecoveryAction.SUGGEST_ALTERNATIVE_PAYMENT
-        delay = 0
+        delay = 15
         sug_method = "UPI"
     elif failure_reason == FailureReason.UPI_FAILURE.value:
-        rec_action = RecoveryAction.SUGGEST_ALTERNATIVE_PAYMENT
+        rec_action = RecoveryAction.RETRY_NOW
         priority = ActionPriority.HIGH if customer_tier == "HIGH" else ActionPriority.MEDIUM
         confidence = 0.92
-        reason = "UPI NPCI network timeout or PSP bank node is degraded. Recommending customer switch to Credit/Debit Card or NetBanking to complete payment instantly."
+        reason = "UPI NPCI network timeout or PSP bank node is degraded. Primary intent is immediate retry, subject to PSP degradation safety guardrail."
         alt_action = RecoveryAction.SEND_PAYMENT_REMINDER
         delay = 0
         sug_method = "CARD"
@@ -261,6 +265,8 @@ Respond strictly in JSON matching this schema:
         alternative_action=alt_action,
         suggested_payment_method=sug_method,
         guardrail_status="PASSED",
+        guardrail_applied=False,
+        original_recommended_action=None,
         factors_considered=factors
     )
 
@@ -278,18 +284,29 @@ async def apply_guardrails_node(state: RecoveryAgentState) -> Dict[str, Any]:
     if not decision:
         return {}
 
+    proposed_action = decision.recommended_action
+    proposed_priority = decision.priority
+
     g_status, final_action, final_priority, g_notes, factors = RecoveryGuardrails.evaluate(
         payment_context=payment,
         customer_history=customer,
-        proposed_action=decision.recommended_action,
-        proposed_priority=decision.priority
+        proposed_action=proposed_action,
+        proposed_priority=proposed_priority
     )
 
-    # Update decision with guardrail verdicts
+    # Update decision with guardrail verdicts & original intent tracking
     decision.guardrail_status = g_status
     decision.guardrail_notes = g_notes
-    if g_status in ["OVERRIDDEN", "ENFORCED"]:
+    
+    if g_status == "OVERRIDDEN":
+        decision.guardrail_applied = True
+        decision.original_recommended_action = proposed_action
         decision.recommended_action = final_action
+        decision.priority = final_priority
+        decision.reason = f"[Guardrail Override] {g_notes} (Original intent: {proposed_action.value})"
+        decision.factors_considered.extend(factors)
+    elif g_status == "ENFORCED":
+        decision.guardrail_applied = True
         decision.priority = final_priority
         decision.factors_considered.extend(factors)
 

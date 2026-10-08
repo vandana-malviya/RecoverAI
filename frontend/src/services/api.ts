@@ -8,9 +8,12 @@ import type {
   SimulationParams,
   SimulationResult,
   DemoScenario,
+  DemoBatchResult,
   AgentActivity,
   AuthUser,
   TokenResponse,
+  WebhookPreset,
+  WebhookSimulateResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -164,6 +167,8 @@ class ApiService {
     new_payment_status: string;
     timestamp: string;
     simulated_gateway_response: any;
+    guardrail_applied?: boolean;
+    original_action?: string;
   }> {
     return this.request('/recovery/execute', {
       method: 'POST',
@@ -195,6 +200,47 @@ class ApiService {
   }> {
     return this.request(`/demo/trigger/${scenarioId}`, {
       method: 'POST',
+    });
+  }
+
+  async resetAllDemoScenarios(): Promise<{
+    success: boolean;
+    reset_count: number;
+    message: string;
+  }> {
+    return this.request('/demo/reset-all', {
+      method: 'POST',
+    });
+  }
+
+  async runBatchDemoScenarios(): Promise<DemoBatchResult> {
+    return this.request('/demo/run-batch', {
+      method: 'POST',
+    });
+  }
+
+  // Webhook Simulation
+  async getWebhookPresets(): Promise<{ presets: WebhookPreset[] }> {
+    return this.request('/webhook/presets');
+  }
+
+  async simulateWebhook(payload: {
+    event?: string;
+    event_id?: string;
+    payment_id?: string;
+    customer_name?: string;
+    customer_email?: string;
+    amount?: number;
+    currency?: string;
+    payment_method?: string;
+    failure_reason?: string;
+    gateway_error_code?: string;
+    gateway_error_description?: string;
+    auto_analyze?: boolean;
+  }): Promise<WebhookSimulateResponse> {
+    return this.request<WebhookSimulateResponse>('/webhook/simulate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 }

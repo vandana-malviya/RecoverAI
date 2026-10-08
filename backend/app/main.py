@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database.connection import DatabaseManager
 from app.database.seed_data import seed_database
-from app.routers import auth, dashboard, payments, customers, agent, simulator, demo
+from app.routers import auth, dashboard, payments, customers, agent, simulator, demo, webhook
 
 # Logging setup
 logging.basicConfig(
@@ -55,6 +55,7 @@ app.include_router(customers.router, prefix=settings.API_V1_STR)
 app.include_router(agent.router, prefix=settings.API_V1_STR)
 app.include_router(simulator.router, prefix=settings.API_V1_STR)
 app.include_router(demo.router, prefix=settings.API_V1_STR)
+app.include_router(webhook.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
